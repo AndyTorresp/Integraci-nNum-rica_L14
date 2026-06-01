@@ -1,0 +1,98 @@
+import numpy as np
+from scipy.interpolate import CubicSpline
+
+# =====================================================================
+# DATOS EXPERIMENTALES (LABORATORIO)
+# =====================================================================
+# V: Volumen en Litros (L)
+V = np.array([1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0])
+# P: Presión en kiloPascales (kPa)
+P = np.array([300.2, 242.1, 201.5, 169.8, 151.0, 134.3, 120.8, 107.9, 99.1, 93.4, 86.2, 79.5, 75.1])
+
+h = 0.25  # Tamaño de paso
+n = 12    # Número de subintervalos
+
+# =====================================================================
+# RUTINAS DE INTEGRACIÓN NUMÉRICA (PROGRAMADAS DESDE CERO)
+# =====================================================================
+
+# 1. Regla del Trapecio Compuesta
+def m_trapecio_compuesto(x, y, h):
+    n_puntos = len(y)
+    suma_intermedios = 0.0
+    for i in range(1, n_puntos - 1):
+        suma_intermedios += y[i]
+    
+    integral = (h / 2.0) * (y[0] + 2.0 * suma_intermedios + y[-1])
+    return integral
+
+# 2. Regla de Simpson 1/3 Compuesta
+def m_simpson_13_compuesto(x, y, h):
+    n_puntos = len(y)
+    suma_impares = 0.0
+    suma_pares = 0.0
+    
+    for i in range(1, n_puntos - 1):
+        if i % 2 != 0:
+            suma_impares += y[i]  # Índices impares: f_1, f_3, ..., f_11
+        else:
+            suma_pares += y[i]    # Índices pares: f_2, f_4, ..., f_10
+            
+    integral = (h / 3.0) * (y[0] + 4.0 * suma_impares + 2.0 * suma_pares + y[-1])
+    return integral
+
+# 3. Regla de Simpson 3/8 Compuesta
+def m_simpson_38_compuesto(x, y, h):
+    n_puntos = len(y)
+    suma_no_mult3 = 0.0
+    suma_mult3 = 0.0
+    
+    for i in range(1, n_puntos - 1):
+        if i % 3 == 0:
+            suma_mult3 += y[i]     # Índices múltiplos de 3: f_3, f_6, f_9
+        else:
+            suma_no_mult3 += y[i]  # Resto de índices intermedios
+            
+    integral = (3.0 * h / 8.0) * (y[0] + 3.0 * suma_no_mult3 + 2.0 * suma_mult3 + y[-1])
+    return integral
+
+# 4. Cuadratura de Gauss-Legendre (m = 3) con Interpolación por Spline Cúbico
+def m_gauss_legendre_m3(x_datos, y_datos, a, b):
+    # Generación del Spline Cúbico para obtener la función continua transitoria P(V)
+    P_continua = CubicSpline(x_datos, y_datos)
+    
+    # Nodos y pesos tabulados para m = 3 en el intervalo [-1, 1]
+    nodos_t = np.array([-np.sqrt(3/5), 0.0, np.sqrt(3/5)])
+    pesos_w = np.array([5/9, 8/9, 5/9])
+    
+    # Transformación lineal de variables (Jacobiano) para el intervalo [a, b]
+    jacobiano = (b - a) / 2.0
+    suma_cuadratura = 0.0
+    
+    for k in range(3):
+        # Mapeo del nodo t_k al dominio del volumen (V)
+        V_transformado = jacobiano * nodos_t[k] + (b + a) / 2.0
+        # Evaluación numérica en la función interpolada
+        suma_cuadratura += pesos_w[k] * P_continua(V_transformado)
+        
+    integral = jacobiano * suma_cuadratura
+    return integral
+
+# =====================================================================
+# CÁLCULO DE RESULTADOS Y TRABAJO TERMODINÁMICO (W)
+# =====================================================================
+W_trapecio = m_trapecio_compuesto(V, P, h)
+W_simp13   = m_simpson_13_compuesto(V, P, h)
+W_simp38   = m_simpson_38_compuesto(V, P, h)
+W_gauss    = m_gauss_legendre_m3(V, P, a=1.0, b=4.0)
+
+# Nota: kPa * L equivale directamente a Joules (J). 
+# Para presentarlo en kiloJoules (kJ) como se estila en informes, se divide entre 1000.
+print("==========================================================")
+print("       RESULTADOS DEL LABORATORIO: TRABAJO DEL PISTÓN     ")
+print("==========================================================")
+print(f"Regla del Trapecio Compuesta : {W_trapecio / 1000.0:.6f} kJ  ({W_trapecio:.4f} J)")
+print(f"Regla de Simpson 1/3 Compuesta: {W_simp13 / 1000.0:.6f} kJ  ({W_simp13:.4f} J)")
+print(f"Regla de Simpson 3/8 Compuesta: {W_simp38 / 1000.0:.6f} kJ  ({W_simp38:.4f} J)")
+print(f"Cuadratura Gauss-Legendre m=3 : {W_gauss / 1000.0:.6f} kJ  ({W_gauss:.4f} J)")
+print("==========================================================")
